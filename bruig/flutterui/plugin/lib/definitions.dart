@@ -1235,6 +1235,53 @@ class LNGetNodeInfoResponse {
       LNGetNodeInfoResponse(LNNode("", "", 0), 0, 0, []);
 }
 
+class LNGraphNode {
+  final String pubkey;
+  final String alias;
+
+  LNGraphNode(this.pubkey, this.alias);
+
+  factory LNGraphNode.fromJson(Map<String, dynamic> json) => LNGraphNode(
+      json["pub_key"] ?? "",
+      json["alias"] ?? "",
+    );
+}
+
+class LNGraphEdge {
+  final int channelID;
+  final String node1Pub;
+  final String node2Pub;
+  final int capacity;
+
+  LNGraphEdge(this.channelID, this.node1Pub, this.node2Pub, this.capacity);
+
+  factory LNGraphEdge.fromJson(Map<String, dynamic> json) => LNGraphEdge(
+      json["channel_id"] ?? 0,
+      json["node1_pub"] ?? "",
+      json["node2_pub"] ?? "",
+      json["capacity"] ?? 0,
+    );
+}
+
+class LNGraphDescription {
+  final List<LNGraphNode> nodes;
+  final List<LNGraphEdge> edges;
+
+  LNGraphDescription(this.nodes, this.edges);
+
+  factory LNGraphDescription.fromJson(Map<String, dynamic> json) {
+    var nodes = (json["nodes"] as List? ?? [])
+        .map<LNGraphNode>((v) => LNGraphNode.fromJson(v))
+        .toList();
+    var edges = (json["edges"] as List? ?? [])
+        .map<LNGraphEdge>((v) => LNGraphEdge.fromJson(v))
+        .toList();
+    return LNGraphDescription(nodes, edges);
+  }
+
+  factory LNGraphDescription.empty() => LNGraphDescription([], []);
+}
+
 @JsonSerializable()
 class LNChannelBalance {
   @JsonKey(defaultValue: 0)
@@ -3778,6 +3825,14 @@ abstract class PluginPlatform {
     return LNGetNodeInfoResponse.fromJson(res);
   }
 
+  Future<LNGraphDescription> lnDescribeGraph() async {
+    var res = await asyncCall(CTLNDescribeGraph, null);
+    if (res == null) {
+      return LNGraphDescription.empty();
+    }
+    return LNGraphDescription.fromJson(res);
+  }
+
   Future<LNBalances> lnGetBalances() async {
     var res = await asyncCall(CTLNGetBalances, null);
     return LNBalances.fromJson(res);
@@ -4482,6 +4537,7 @@ const int CTRTDTCancelInvite = 0xb1;
 const int CTDeclineKXSuggestion = 0xb2;
 const int CTUpdateLastMsgReadTime = 0xb3;
 const int CTDeclineGCInvite = 0xb4;
+const int CTLNDescribeGraph = 0xb5;
 
 const int notificationsStartID = 0x1000;
 

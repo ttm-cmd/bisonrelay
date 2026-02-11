@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:bruig/models/snackbar.dart';
 import 'package:collection/collection.dart';
 import 'package:bruig/components/dcr_input.dart';
@@ -10,7 +12,6 @@ import 'package:golib_plugin/definitions.dart';
 import 'package:golib_plugin/golib_plugin.dart';
 import 'package:golib_plugin/util.dart';
 import 'package:bruig/components/copyable.dart';
-import 'package:bruig/theme_manager.dart';
 import 'package:tuple/tuple.dart';
 
 class LNNetworkPage extends StatefulWidget {
@@ -52,6 +53,8 @@ class _LNNetworkPageState extends State<LNNetworkPage> {
   bool connecting = false;
   bool querying = false;
   bool closed = true;
+  bool graphLoading = false;
+  LNGraphDescription graphDescription = LNGraphDescription.empty();
   String serverNode = "";
   List<LNPeer> peers = [];
   String lastQueriedNode = "";
@@ -145,10 +148,45 @@ class _LNNetworkPageState extends State<LNNetworkPage> {
     await queryRouteToNode(serverNode, 0);
   }
 
+  Future<void> loadGraph() async {
+    var snackbar = SnackBarModel.of(context);
+    setState(() {
+      graphLoading = true;
+    });
+    try {
+      var graph = await Golib.lnDescribeGraph();
+      setState(() {
+        graphDescription = graph;
+      });
+    } catch (exception) {
+      snackbar.error("Unable to describe LN graph: $exception");
+    } finally {
+      setState(() {
+        graphLoading = false;
+      });
+    }
+  }
+
+  LNGraphDescription limitedGraph({int maxNodes = 150}) {
+    if (graphDescription.nodes.length <= maxNodes) {
+      return graphDescription;
+    }
+
+    var selected = graphDescription.nodes.take(maxNodes).toList();
+    var selectedKeys = selected.map((n) => n.pubkey).toSet();
+    var edges = graphDescription.edges
+        .where((e) =>
+            selectedKeys.contains(e.node1Pub) &&
+            selectedKeys.contains(e.node2Pub))
+        .toList();
+    return LNGraphDescription(selected, edges);
+  }
+
   @override
   void initState() {
     super.initState();
     loadInfo();
+    loadGraph();
   }
 
   Widget _buildChannel(LNChannelEdge chan) {
@@ -261,12 +299,39 @@ class _LNNetworkPageState extends State<LNNetworkPage> {
           ]));
     }
 
+    var graph = limitedGraph();
+
     return Container(
         alignment: Alignment.topLeft,
         padding: const EdgeInsets.all(16),
         child: SingleChildScrollView(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const LNInfoSectionHeader("Lightning Graph Visualizer"),
+            const SizedBox(height: 8),
+            Row(children: [
+              OutlinedButton(
+                  onPressed: graphLoading ? null : loadGraph,
+                  child: Txt.S(graphLoading ? "Loading graph..." : "Refresh Graph")),
+              const SizedBox(width: 12),
+              Txt.S("Nodes: ${graph.nodes.length}/${graphDescription.nodes.length}"),
+              const SizedBox(width: 12),
+              Txt.S("Channels: ${graph.edges.length}"),
+            ]),
+            const SizedBox(height: 8),
+            Container(
+                width: double.infinity,
+                height: 360,
+                decoration: BoxDecoration(
+                    border: Border.all(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3))),
+                child: graph.nodes.isEmpty
+                    ? const Center(child: Txt.S("No graph data available"))
+                    : Tooltip(
+                        message: graphDescription.nodes.length > graph.nodes.length
+                            ? "Showing first ${graph.nodes.length} nodes to keep rendering responsive"
+                            : "Each point is a node and each line is a public channel",
+                        child: LNGraphCanvas(graph)))),
+            const SizedBox(height: 21),
             const LNInfoSectionHeader("Server Node"),
             const SizedBox(height: 8),
             Row(children: [
@@ -316,5 +381,67 @@ class _LNNetworkPageState extends State<LNNetworkPage> {
                 child: const Text("Search")),
           ]),
         ));
+  }
+}
+
+
+class LNGraphCanvas extends StatelessWidget {
+  final LNGraphDescription graph;
+
+  const LNGraphCanvas(this.graph, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      var side = math.min(constraints.maxWidth, constraints.maxHeight);
+      var center = Offset(constraints.maxWidth / 2, constraints.maxHeight / 2);
+      var radius = side * 0.42;
+      var positions = <String, Offset>{};
+      for (var i = 0; i < graph.nodes.length; i++) {
+        var angle = (2 * math.pi * i) / math.max(1, graph.nodes.length);
+        positions[graph.nodes[i].pubkey] =
+            center + Offset(math.cos(angle) * radius, math.sin(angle) * radius);
+      }
+      return CustomPaint(
+          painter: _LNGraphPainter(graph, positions),
+          size: Size(constraints.maxWidth, constraints.maxHeight));
+    });
+  }
+}
+
+class _LNGraphPainter extends CustomPainter {
+  final LNGraphDescription graph;
+  final Map<String, Offset> positions;
+
+  _LNGraphPainter(this.graph, this.positions);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final edgePaint = Paint()
+      ..color = Colors.blueGrey.withOpacity(0.35)
+      ..strokeWidth = 1;
+    final nodePaint = Paint()..color = Colors.lightBlueAccent;
+
+    for (var edge in graph.edges) {
+      var n1 = positions[edge.node1Pub];
+      var n2 = positions[edge.node2Pub];
+      if (n1 == null || n2 == null) {
+        continue;
+      }
+      canvas.drawLine(n1, n2, edgePaint);
+    }
+
+    for (var node in graph.nodes) {
+      var center = positions[node.pubkey];
+      if (center == null) {
+        continue;
+      }
+      canvas.drawCircle(center, 3, nodePaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _LNGraphPainter oldDelegate) {
+    return oldDelegate.graph != graph;
   }
 }

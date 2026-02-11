@@ -1575,6 +1575,13 @@ func handleClientCmd(cc *clientCtx, cmd *cmd) (interface{}, error) {
 		}
 		return lnc.GetNodeInfo(context.Background(), &req)
 
+	case CTLNDescribeGraph:
+		if lnc == nil {
+			return nil, fmt.Errorf("LN client not initialized")
+		}
+		return lnc.DescribeGraph(context.Background(),
+			&lnrpc.ChannelGraphRequest{IncludeUnannounced: false})
+
 	case CTLNGetBalances:
 		if lnc == nil {
 			return nil, fmt.Errorf("LN client not initialized")

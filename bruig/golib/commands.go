@@ -187,6 +187,7 @@ const (
 	CTDeclineKXSuggestion          CmdType = 0xb2
 	CTUpdateLastMsgReadTime        CmdType = 0xb3
 	CTDeclineGCInvite              CmdType = 0xb4
+	CTLNDescribeGraph              CmdType = 0xb5
 
 	NTInviteReceived            = 0x1001
 	NTInviteAccepted            = 0x1002
