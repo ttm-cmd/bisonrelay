@@ -76,6 +76,30 @@ using the [clientrpc](clientrpc) interface.
 More information about running a simple store can be found in
 the [/doc](/doc/simplestore.md) subdir.
 
+
+### Standalone LN Visualizer
+
+A lightweight standalone web app is available in `cmd/lnviz` to inspect the
+current Decred Lightning Network graph from an already-running `dcrlnd` node.
+
+Run it with your local node credentials:
+
+```
+$ go run ./cmd/lnviz \
+    --rpcserver 127.0.0.1:10009 \
+    --tlscert ~/.dcrlnd/tls.cert \
+    --macaroon ~/.dcrlnd/data/chain/decred/mainnet/admin.macaroon
+```
+
+Then open `http://127.0.0.1:3007`. Use the **max nodes** control to limit how
+much of the graph is rendered for interactive analysis.
+
+For a quick UI demo without a live node:
+
+```
+$ go run ./cmd/lnviz --mock
+```
+
 ### Server
 
 A private server can be executed by running:
